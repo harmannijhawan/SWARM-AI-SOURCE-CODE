@@ -1,0 +1,31 @@
+{
+  "directory": "C:\\Users\\user\\AppData\\Local\\Temp\\swarm-v3-diagnostic-UDMuuh",
+  "started": 1791125854613,
+  "greeting": {
+    "status": "complete",
+    "text": "Hey! We're SWARM, your AI team living right here on your PC. Right now, we're standing by and keeping things running smoothly, ready to help you build projects, write code, automate tasks on your computer, or just chat and answer questions. \n\nWhat's on your mind today? Anything we can help you build or run?",
+    "model": "Gemini Robotics-ER 2 Preview"
+  },
+  "inspection": {
+    "status": "complete",
+    "text": "The connection verification code displayed in the SWARM V3 diagnostic window is **ORCHID 428**.",
+    "model": "Gemini Robotics-ER 2 Preview",
+    "activities": [
+      {
+        "id": "tool_3e14ed843c81477a",
+        "tool": "swarm.computer",
+        "label": "Checking SWARM",
+        "status": "error",
+        "ts": 1791125864097,
+        "detail": "[\n  {\n    \"code\": \"invalid_union\",\n    \"errors\": [],\n    \"note\": \"No matching discriminator\",\n    \"discriminator\": \"action\",\n    \"options\": [\n      \"status\",\n      \"projects\",\n      \"select_project\",\n      \"build\",\n      \"control\",\n      \"message\",\n      \"agent_control\"\n    ],\n    \"path\": [\n      \"action\"\n    ],\n    \"message\": \"Invalid discriminator value. Expected 'status' | 'projects' | 'select_project' | 'build' | 'control' | 'message' | 'agent_control'\"\n  }\n]"
+      },
+      {
+        "id": "tool_2adb8f513e1741ec",
+        "tool": "computer.screenshot",
+        "label": "Looking at your PC",
+        "status": "complete",
+        "ts": 1791125869928
+      }
+    ]
+  }
+}

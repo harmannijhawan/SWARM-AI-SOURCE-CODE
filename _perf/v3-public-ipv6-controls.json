@@ -1,0 +1,94 @@
+[
+  {
+    "host": "2405-201-4006-8368-5b6f-d4ce-e80c-fcad.sslip.io:47821",
+    "nodes": {
+      "de1.node.check-host.net": [
+        "de",
+        "Germany",
+        "Nuremberg",
+        "142.132.174.167",
+        "AS24940"
+      ],
+      "ir2.node.check-host.net": [
+        "ir",
+        "Iran",
+        "Isfahan",
+        "195.182.38.164",
+        "AS209279"
+      ],
+      "us1.node.check-host.net": [
+        "us",
+        "USA",
+        "Los Angeles",
+        "38.145.202.12",
+        "AS18978"
+      ]
+    },
+    "ok": 1,
+    "permanent_link": "https://check-host.net/check-report/4ef6e2d5k599",
+    "request_id": "4ef6e2d5k599",
+    "result": {
+      "de1.node.check-host.net": [
+        {
+          "error": "Unknown host"
+        }
+      ],
+      "ir2.node.check-host.net": [
+        {
+          "error": "Connection timed out"
+        }
+      ],
+      "us1.node.check-host.net": [
+        {
+          "error": "Unknown host"
+        }
+      ]
+    }
+  },
+  {
+    "host": "2a01-4f8-c17-b8f--2.sslip.io:443",
+    "nodes": {
+      "de1.node.check-host.net": [
+        "de",
+        "Germany",
+        "Nuremberg",
+        "142.132.174.167",
+        "AS24940"
+      ],
+      "ir2.node.check-host.net": [
+        "ir",
+        "Iran",
+        "Isfahan",
+        "195.182.38.164",
+        "AS209279"
+      ],
+      "us1.node.check-host.net": [
+        "us",
+        "USA",
+        "Los Angeles",
+        "38.145.202.12",
+        "AS18978"
+      ]
+    },
+    "ok": 1,
+    "permanent_link": "https://check-host.net/check-report/4ef6e2cbke26",
+    "request_id": "4ef6e2cbke26",
+    "result": {
+      "de1.node.check-host.net": [
+        {
+          "error": "Unknown host"
+        }
+      ],
+      "ir2.node.check-host.net": [
+        {
+          "error": "Connection timed out"
+        }
+      ],
+      "us1.node.check-host.net": [
+        {
+          "error": "Unknown host"
+        }
+      ]
+    }
+  }
+]

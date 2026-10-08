@@ -1,0 +1,7 @@
+app/build/
+node_modules/
+dist/
+release/
+*.log
+.swarm-test/
+swarm upload/SWARM-AI-Setup.exe

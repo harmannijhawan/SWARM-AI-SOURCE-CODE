@@ -1,0 +1,197 @@
+{
+  "at": "2026-10-05T12:00:08.108Z",
+  "port": 47821,
+  "origin": "PC",
+  "cellularVerified": false,
+  "externalRequested": true,
+  "connectivity": {
+    "running": true,
+    "port": 47821,
+    "mapPorts": false,
+    "updatedAt": "2026-10-05T12:00:13.408Z",
+    "lan": [
+      "192.168.29.158"
+    ],
+    "ipv6": {
+      "addresses": [
+        "2405:201:4006:8368:5b6f:d4ce:e80c:fcad"
+      ],
+      "all": [
+        {
+          "address": "2405:201:4006:8368:5b6f:d4ce:e80c:fcad",
+          "interface": "WiFi",
+          "temporary": false,
+          "deprecated": false
+        },
+        {
+          "address": "2405:201:4006:8368:68cc:40b0:8110:9095",
+          "interface": "WiFi",
+          "temporary": true,
+          "deprecated": false
+        }
+      ],
+      "firewallRuleOk": true
+    },
+    "upnp": {
+      "attempted": true,
+      "ok": false,
+      "mapped": false,
+      "gatewayIp": null,
+      "externalIp": null,
+      "externalPort": null,
+      "internalPort": null,
+      "leaseSeconds": null,
+      "error": "no UPnP gateway answered the SSDP search (UPnP disabled on the router, or multicast blocked)"
+    },
+    "natpmp": {
+      "attempted": true,
+      "ok": false,
+      "mapped": false,
+      "gatewayIp": "192.168.29.1",
+      "externalIp": null,
+      "externalPort": null,
+      "internalPort": null,
+      "leaseSeconds": null,
+      "error": "no NAT-PMP answer from 192.168.29.1:5351 (router does not support NAT-PMP or it is disabled)"
+    },
+    "stun": {
+      "publicIp": "49.36.144.98",
+      "natType": "endpoint-independent",
+      "error": null
+    },
+    "publicAddress": "unknown",
+    "publicAddressReason": "router did not report a WAN address (no UPnP/NAT-PMP), cannot compare with STUN",
+    "summary": "LAN: 192.168.29.158 works on the same network. IPv6: 1 global address(es) available; direct from mobile data if the router firewall allows inbound. No automatic IPv4 mapping (UPnP: no UPnP gateway answered the SSDP search (UPnP disabled on the router, or multicast blocked); NAT-PMP: no NAT-PMP answer from 192.168.29.1:5351 (router does not support NAT-PMP or it is disabled)). NAT mapping is endpoint-independent."
+  },
+  "hosts": [
+    "192.168.29.158:47821",
+    "[2405:201:4006:8368:5b6f:d4ce:e80c:fcad]:47821"
+  ],
+  "routes": [
+    {
+      "host": "::1",
+      "tcpTlsAndAuthentication": true,
+      "websocket": {
+        "hello": true,
+        "authenticated": true,
+        "certificatePinned": true
+      },
+      "listener": {
+        "address": "::",
+        "family": "IPv6",
+        "port": 47821
+      },
+      "origin": "same PC"
+    },
+    {
+      "host": "192.168.29.158",
+      "tcpTlsAndAuthentication": true,
+      "websocket": {
+        "hello": true,
+        "authenticated": true,
+        "certificatePinned": true
+      },
+      "listener": {
+        "address": "::",
+        "family": "IPv6",
+        "port": 47821
+      },
+      "origin": "same PC"
+    },
+    {
+      "host": "2405:201:4006:8368:5b6f:d4ce:e80c:fcad",
+      "tcpTlsAndAuthentication": true,
+      "websocket": {
+        "hello": true,
+        "authenticated": true,
+        "certificatePinned": true
+      },
+      "listener": {
+        "address": "::",
+        "family": "IPv6",
+        "port": 47821
+      },
+      "origin": "same PC"
+    }
+  ],
+  "external": [
+    {
+      "kind": "pc",
+      "target": "2405-201-4006-8368-5b6f-d4ce-e80c-fcad.sslip.io:47821",
+      "nodes": {
+        "de1.node.check-host.net": [
+          "de",
+          "Germany",
+          "Nuremberg",
+          "142.132.174.167",
+          "AS24940"
+        ],
+        "ir2.node.check-host.net": [
+          "ir",
+          "Iran",
+          "Isfahan",
+          "195.182.38.164",
+          "AS209279"
+        ],
+        "us1.node.check-host.net": [
+          "us",
+          "USA",
+          "Los Angeles",
+          "38.145.202.12",
+          "AS18978"
+        ]
+      },
+      "ok": 1,
+      "permanent_link": "https://check-host.net/check-report/4f1f5f45ka8c",
+      "request_id": "4f1f5f45ka8c",
+      "result": {
+        "de1.node.check-host.net": null,
+        "ir2.node.check-host.net": null,
+        "us1.node.check-host.net": null
+      }
+    },
+    {
+      "kind": "ipv6Control",
+      "target": "ipv6.google.com:443",
+      "nodes": {
+        "de1.node.check-host.net": [
+          "de",
+          "Germany",
+          "Nuremberg",
+          "142.132.174.167",
+          "AS24940"
+        ],
+        "ir2.node.check-host.net": [
+          "ir",
+          "Iran",
+          "Isfahan",
+          "195.182.38.164",
+          "AS209279"
+        ],
+        "us1.node.check-host.net": [
+          "us",
+          "USA",
+          "Los Angeles",
+          "38.145.202.12",
+          "AS18978"
+        ]
+      },
+      "ok": 1,
+      "permanent_link": "https://check-host.net/check-report/4f1f5f55k97e",
+      "request_id": "4f1f5f55k97e",
+      "result": {
+        "de1.node.check-host.net": null,
+        "ir2.node.check-host.net": null,
+        "us1.node.check-host.net": null
+      }
+    },
+    {
+      "kind": "ipv4Control",
+      "target": "1.1.1.1:443",
+      "error": "limit_exceeded"
+    }
+  ],
+  "externalIpv6CapableNodes": [],
+  "externalConclusion": "INCONCLUSIVE: external nodes failed the IPv6-positive control. Their PC timeouts cannot verify or disprove public IPv6 ingress.",
+  "localStackVerified": true
+}

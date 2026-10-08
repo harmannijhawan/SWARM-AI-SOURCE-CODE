@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+
+# Build and test output
+dist/
+build/
+release/
+coverage/
+.vite/
+.gradle/
+.kotlin/
+app/build/
+
+# Environment and credentials
+.env
+.env.*
+!.env.example
+*.local
+local.properties
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+
+# Local databases, user data, and logs
+*.db
+*.sqlite
+*.sqlite3
+*.log
+.swarm/
+.swarm-test/
+data/
+workspace/
+
+# Backups and machine-specific project files
+_backup*/
+_perf/
+_screenshots/
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
