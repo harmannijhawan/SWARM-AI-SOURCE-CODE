@@ -1,3 +1,5 @@
+import {scoreModel} from '../../shared/model-score';
+export {scoreModel} from '../../shared/model-score';
 // Model router: scores every eligible model for a task, then executes with an
 // automatic, dynamically generated fallback chain across models and providers.
 import type { AgentRole, Capability, ModelInfo, UsageRecord } from '../../shared/types';
@@ -24,74 +26,6 @@ export interface RouteRequest {
   exclude?: Set<string>;
   complexity?: 'small' | 'normal' | 'complex';
   escalation?: number;
-}
-
-interface Weights { size: number; reliability: number; latency: number; local: number; cloud: number }
-
-const PURPOSE_CAPS: Record<Purpose, Capability[]> = {
-  plan: ['reasoning', 'long_context'],
-  research: ['long_context', 'reasoning'],
-  design: ['reasoning'],
-  architecture: ['reasoning', 'coding'],
-  code: ['coding', 'long_context'],
-  review: ['coding', 'reasoning'],
-  vision: ['vision'],
-  classify: ['fast'],
-  summarize: ['fast', 'long_context'],
-  test: ['coding'],
-};
-const HEAVY: Purpose[] = ['plan', 'architecture', 'code', 'review', 'design'];
-
-function weights(s: Settings): Weights {
-  switch (s.ai.routing) {
-    case 'local_first': return { size: 1, reliability: 1, latency: 1, local: 60, cloud: 0 };
-    case 'cloud_first': return { size: 1, reliability: 1, latency: 1, local: -40, cloud: 10 };
-    case 'fastest': return { size: 0.3, reliability: 1, latency: 4, local: 0, cloud: 0 };
-    case 'quality': return { size: 2, reliability: 1.2, latency: 0.3, local: -10, cloud: 5 };
-    default: return { size: 1, reliability: 1, latency: 1, local: 0, cloud: 0 };
-  }
-}
-
-export function scoreModel(m: ModelInfo, req: RouteRequest, s: Settings): number {
-  const w = weights(s);
-  let score = 0;
-  const caps = new Set(m.capabilities);
-  for (const c of PURPOSE_CAPS[req.purpose]) if (caps.has(c)) score += 25;
-  const heavy = HEAVY.includes(req.purpose);
-  const size = m.paramsB ?? (m.providerId === 'ollama' ? 7 : 30);
-  if (req.complexity === 'small' && !(req.escalation ?? 0) && s.ai.routing === 'auto') {
-    // Prefer efficient capable models, still weighted by observed reliability below.
-    score += Math.max(0, 48 - Math.log2(Math.max(size, 1)) * 8);
-  } else if (heavy) {
-    score += Math.min(Math.log2(Math.max(size, 1)) * 7, 70) * w.size;
-    if (size < 13 && s.ai.routing === 'auto') score -= 25; // keep small models for light work
-  } else if (req.purpose === 'classify' || req.purpose === 'summarize') {
-    score += Math.max(0, 30 - Math.log2(Math.max(size, 1)) * 4);
-  } else {
-    score += Math.min(Math.log2(Math.max(size, 1)) * 4, 40) * w.size;
-  }
-  // Measured reliability (Laplace smoothed) and latency.
-  const rel = (m.successes + 1) / (m.calls + 2);
-  score += rel * 40 * w.reliability;
-  if (m.consecutiveFailures) score -= m.consecutiveFailures * 12;
-  // Expected wall time for this request from measured time-to-first-token and throughput.
-  // Unmeasured models get a size-based throughput prior (very large models are usually slower).
-  {
-    const expectedTokens = Math.min(req.maxTokens, heavy ? 2500 : 700);
-    const tpsPrior = size <= 30 ? 60 : size <= 150 ? 35 : 18;
-    const secs = (m.latencyMs ?? 3000) / 1000 + expectedTokens / Math.max(4, m.tokensPerSec ?? tpsPrior);
-    score -= Math.min(secs, 150) * 0.6 * w.latency;
-  }
-  if (m.health === 'healthy') score += 45;
-  else if (m.health === 'degraded') score -= 20;
-  else if (m.health === 'offline') score -= 60;
-  if (m.providerId === 'ollama') score += w.local; else score += w.cloud;
-  // Context headroom.
-  if (m.contextLength < req.promptTokens + req.maxTokens) score -= 80;
-  // Per-role preference from settings.
-  if (req.role && s.agents.modelPreference[req.role] === m.id) score += 1000;
-  if (req.pinned && req.pinned === m.id) score += 5000;
-  return score;
 }
 
 const routeCache = new Map<string, { expires: number; ranks: { model: ModelInfo; score: number }[] }>();
@@ -178,104 +112,7 @@ export class NoModelError extends Error {
 }
 
 export async function complete<T = string>(opts: CompleteOptions<T>): Promise<CompleteResult<T>> {
-  const currentSettings = getSettings();
-  const s = opts.routingOverride ? { ...currentSettings, ai: { ...currentSettings.ai, routing: opts.routingOverride } } : currentSettings;
-  const maxTokens = opts.route.maxTokens ?? s.ai.maxOutputTokens;
-  const promptTokens = estimatePromptTokens(opts.messages);
-  const exclude = new Set(opts.route.exclude ?? []);
-  const skipProviders = new Set<string>();
-  const attempts: CompleteResult<T>['attempts'] = [];
-  const maxAttempts = s.routing.maxFallbacks + 1;
-  const pinned = opts.isolatedExperiment ? null : opts.route.pinned ?? s.ai.pinnedModel;
-
-  if (opts.cacheKey && s.performance.cacheModelResults) {
-    const hit = db().cacheGet('model:' + opts.cacheKey, 7 * 24 * 3600_000);
-    if (hit) {
-      const cached = JSON.parse(hit) as { text: string; modelId: string };
-      const model = listModels().find((m) => m.id === cached.modelId);
-      if (model) {
-        const value = opts.validate ? opts.validate(cached.text, { text: cached.text, promptTokens: 0, completionTokens: 0, finishReason: 'stop', latencyMs: 0, ttftMs: 0, usageEstimated: true }) : (cached.text as T);
-        emit('MODEL_COMPLETED', `Reused cached result from ${model.displayName}`, opts.scope, 'debug', { modelId: model.id, cached: true });
-        return { text: cached.text, value, model, result: { text: cached.text, promptTokens: 0, completionTokens: 0, finishReason: 'stop', latencyMs: 0, ttftMs: 0, usageEstimated: true }, attempts: [], recovered: false };
-      }
-    }
-  }
-
-  let previous: ModelInfo | null = null;
-  let lastReason = '';
-  let failedAt = 0;
-  for (let i = 0; i < maxAttempts; i++) {
-    if (opts.signal.aborted) throw new CancelledError();
-    const endRoute = timeOperation('route', opts.scope.runId ?? undefined);
-    const ranked = rankModels({ ...opts.route, escalation: i, promptTokens, maxTokens, pinned, exclude }, s)
-      .filter((r) => !skipProviders.has(r.model.providerId));
-    const pick = ranked[0]?.model;
-    endRoute();
-    if (!pick) {
-      const reason = attempts.length
-        ? `All eligible models failed (${attempts.length} attempts). Last error: ${lastReason}`
-        : `No eligible free model with required capabilities (${[...(opts.route.needs ?? [])].join(', ') || opts.route.purpose}). Connect a provider or start Ollama.`;
-      throw new NoModelError(reason);
-    }
-    exclude.add(pick.id);
-    if (previous) {
-      recordTiming('fallback', Date.now() - failedAt, opts.scope.runId ?? undefined);
-      emit('MODEL_FALLBACK', `Recovered automatically: switching from ${previous.displayName} to ${pick.displayName}`, opts.scope, 'warning', { from: previous.id, to: pick.id, reason: lastReason });
-      if (!opts.quiet) notify('fallback', 'warning', 'Model fallback', `${previous.displayName} → ${pick.displayName}`, opts.scope);
-    } else {
-      emit('MODEL_SELECTED', `Routed to ${pick.displayName} (${pick.providerId})`, opts.scope, 'info', { modelId: pick.id, purpose: opts.route.purpose, candidates: ranked.length, score: Math.round(ranked[0].score) });
-    }
-    const a = adapter(pick.providerId)!;
-    const local = a.kind === 'local';
-    const started = Date.now();
-    const endRequest = timeOperation('model', opts.scope.runId ?? undefined);
-    try {
-      await acquire(pick.providerId, opts.signal);
-      let result: ChatResult;
-      try {
-        opts.onRequest?.(pick);
-        result = await a.chat(providerConfig(pick.providerId), pick.modelId, {
-          messages: opts.messages,
-          maxTokens: Math.min(maxTokens, pick.maxOutput ?? maxTokens, Math.max(512, pick.contextLength - promptTokens - 64)),
-          temperature: opts.temperature ?? s.ai.temperature,
-          signal: opts.signal,
-          stream: opts.stream ?? s.performance.streaming,
-          json: opts.json,
-          onToken: opts.onToken,
-          firstTokenTimeoutMs: Math.min(s.routing.firstTokenTimeoutSec * 1000 * (local ? 2 : 1), pick.latencyMs === null || pick.successes < 5 ? Infinity : Math.max(15000, pick.latencyMs * 4 + 5000)),
-          totalTimeoutMs: s.routing.requestTimeoutSec * 1000,
-        });
-      } finally { release(pick.providerId); }
-      if (!result.text.trim()) throw new ProviderError('invalid', 'Empty response');
-      let value: T;
-      try { value = opts.validate ? opts.validate(result.text, result) : (result.text as T); }
-      catch (ve) { throw new ProviderError('invalid', `Malformed output: ${errMsg(ve)}`); }
-      if (!opts.isolatedExperiment) recordSuccess(pick.id, result.latencyMs, result.ttftMs, result.completionTokens);
-      recordUsage(opts.scope, pick, result, true, null, local);
-      attempts.push({ modelId: pick.id, ok: true });
-      opts.onAttempt?.({ model: pick, ok: true });
-      emit('MODEL_COMPLETED', `${pick.displayName} responded in ${(result.latencyMs / 1000).toFixed(1)}s`, opts.scope, 'debug', {
-        modelId: pick.id, latencyMs: result.latencyMs, ttftMs: result.ttftMs, promptTokens: result.promptTokens, completionTokens: result.completionTokens, finish: result.finishReason,
-      });
-      if (opts.cacheKey && s.performance.cacheModelResults) db().cacheSet('model:' + opts.cacheKey, JSON.stringify({ text: result.text, modelId: pick.id }));
-      return { text: result.text, value, model: pick, result, attempts, recovered: attempts.length > 1 };
-    } catch (e) {
-      if (e instanceof CancelledError || (e instanceof ProviderError && e.kind === 'cancelled') || opts.signal.aborted) throw new CancelledError();
-      const pe = e instanceof ProviderError ? e : new ProviderError('network', errMsg(e));
-      lastReason = `${pe.kind}: ${pe.message}`.slice(0, 300);
-      if (!opts.isolatedExperiment || ['rate_limit', 'quota', 'auth'].includes(pe.kind)) recordFailure(pick.id, pe.kind, pe.message, pe.retryAfterMs);
-      recordUsage(opts.scope, pick, null, false, lastReason, local, Date.now() - started);
-      attempts.push({ modelId: pick.id, ok: false, error: lastReason });
-      opts.onReset?.();
-      opts.onAttempt?.({ model: pick, ok: false, error: lastReason, kind: pe.kind });
-      emit('MODEL_ERROR', `${pick.displayName}: ${describeKind(pe.kind)}`, opts.scope, 'debug', { modelId: pick.id, kind: pe.kind, error: pe.message.slice(0, 500) });
-      // Provider-wide failures: skip remaining models from the same provider for this request.
-      if (pe.kind === 'auth' || pe.kind === 'network' || pe.kind === 'quota') skipProviders.add(pick.providerId);
-      previous = pick;
-      failedAt = Date.now();
-    } finally { endRequest(); }
-  }
-  throw new NoModelError(`Exhausted ${maxAttempts} model attempts. Last error: ${lastReason}`);
+  return (await import('../account/managed')).managedComplete(opts);
 }
 
 function describeKind(k: ProviderErrorKind): string {

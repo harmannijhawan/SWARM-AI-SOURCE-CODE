@@ -19,9 +19,6 @@ class App : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        Thread.setDefaultUncaughtExceptionHandler { _, throwable ->
-            android.util.Log.e("SwarmAI_Crash", "Uncaught exception", throwable)
-        }
         appScope.launch {
             try {
                 swarmRepository.seedIfEmpty()

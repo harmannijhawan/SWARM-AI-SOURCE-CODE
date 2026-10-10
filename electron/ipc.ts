@@ -1,3 +1,5 @@
+import { managedRequest } from './account/sync';
+import { accountStatus, signInAccount, signOutAccount, syncAccount } from './account/sync';
 // IPC surface between renderer and main. Secrets never cross this boundary:
 // the renderer only receives masked key hints.
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
@@ -32,6 +34,7 @@ type Handler = (...args: never[]) => unknown;
 /** Every registered channel, so the remote gateway can call existing handlers by name (behind its own allow-list). */
 const handlers = new Map<string, Handler>();
 export async function callHandler(channel: string, ...args: unknown[]): Promise<unknown> {
+  if (!channel.startsWith('account:') && !accountStatus().connected) throw new Error('Sign in to SWARM to continue.');
   const fn = handlers.get(channel);
   if (!fn) throw new Error('Unknown channel: ' + channel);
   return (fn as (...a: unknown[]) => unknown)(...args);
@@ -39,7 +42,8 @@ export async function callHandler(channel: string, ...args: unknown[]): Promise<
 function handle(channel: string, fn: Handler) {
   handlers.set(channel, fn);
   ipcMain.handle(channel, async (_e, ...args) => {
-    try { return { ok: true, data: await (fn as (...a: unknown[]) => unknown)(...args) }; }
+    if (!_e.senderFrame?.url.startsWith('file://')) return {ok:false,error:'Native controls are available only in the local workspace.'};
+    try { return { ok: true, data: await callHandler(channel, ...args) }; }
     catch (err) { return { ok: false, error: errMsg(err) }; }
   });
 }
@@ -73,6 +77,11 @@ function usageSummary(projectId?: string): UsageSummary {
 }
 
 export function registerIpc(getWindow: () => BrowserWindow | null) {
+  handle('account:status',accountStatus);
+  handle('account:openWebsite',()=>shell.openExternal(accountStatus().origin + '/app/settings'));
+  handle('account:signIn',signInAccount);
+  handle('account:signOut',signOutAccount);
+  handle('account:sync',syncAccount);
   initializeWorkspace();
   handle('workspace:snapshot', workspaceSnapshot);
   handle('workspace:file', workspaceFile);
@@ -302,6 +311,9 @@ export function registerIpc(getWindow: () => BrowserWindow | null) {
   });
 
   // ---------------- models & providers
+  handle('account:entitlements',()=>managedRequest('account/entitlements'));
+  handle('account:modelPreferences',(profile:string,speed:string)=>managedRequest('account/model-preferences',{profile,speed}));
+  handle('account:billing',()=>managedRequest('billing/history'));
   handle('models:list', () => ({ models: listModels(), providers: listProviders() }));
   handle('models:discover', async (providerId?: string) => { if (providerId) await discoverProvider(providerId); else await discoverAll(); return { models: listModels(), providers: listProviders() }; });
   handle('models:healthCheck', async (providerId?: string) => { await healthCheckSample(providerId ? 8 : 4, providerId); return listModels(); });
@@ -310,7 +322,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null) {
   handle('models:rank', (purpose: Purpose, role?: AgentRole) => rankModels({ purpose, role, promptTokens: 2000, maxTokens: 2000 }).slice(0, 12).map((r) => ({ id: r.model.id, score: Math.round(r.score) })));
   handle('models:usage', (projectId?: string) => usageSummary(projectId));
   handle('providers:setKey', async (providerId: string, key: string | null) => {
-    if (!ADAPTERS.some((a) => a.id === providerId) && !['brave', 'tavily'].includes(providerId)) throw new Error('Unknown provider');
+    if (!['brave', 'tavily'].includes(providerId)) throw new Error('Unknown provider');
     setSecret(providerId, key?.trim() || null);
     if (ADAPTERS.some((a) => a.id === providerId)) { refreshProviderInfo(providerId); await discoverProvider(providerId); }
     return { hint: mask(getSecret(providerId, getSettings().providers.useEnvKeys)?.value) };
@@ -319,18 +331,8 @@ export function registerIpc(getWindow: () => BrowserWindow | null) {
     const s = getSettings();
     return ['brave', 'tavily'].map((id) => { const k = getSecret(id, s.providers.useEnvKeys); return { id, hint: mask(k?.value), source: k?.source ?? null }; });
   });
-  handle('providers:configure', async (providerId: string, cfg: { baseUrl?: string; accountId?: string; enabled?: boolean }) => {
-    const s = getSettings();
-    updateSettings({
-      providers: {
-        baseUrls: cfg.baseUrl !== undefined ? { ...s.providers.baseUrls, [providerId]: cfg.baseUrl } : s.providers.baseUrls,
-        accountIds: cfg.accountId !== undefined ? { ...s.providers.accountIds, [providerId]: cfg.accountId } : s.providers.accountIds,
-        enabled: cfg.enabled !== undefined ? { ...s.providers.enabled, [providerId]: cfg.enabled } : s.providers.enabled,
-      },
-    });
-    refreshProviderInfo(providerId);
-    if (cfg.enabled !== false) await discoverProvider(providerId);
-    return listProviders();
+  handle('providers:configure', async () => {
+    throw new Error('AI provider configuration is managed by SWARM.');
   });
   handle('ollama:status', () => ollamaStatus(getSettings().advanced.ollamaUrl));
 

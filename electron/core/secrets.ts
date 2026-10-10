@@ -18,8 +18,10 @@ const ENV_KEYS: Record<string, string[]> = {
 };
 
 export function setSecret(id: string, value: string | null) {
+  if(!id.startsWith('account.')) {const disabled=JSON.parse(db().kvGet('account.disabledProviders')||'[]') as string[];db().kvSet('account.disabledProviders',JSON.stringify(disabled.filter(p=>p!==id)));}
   if (!value) { db().prepare('DELETE FROM secrets WHERE id = ?').run(id); return; }
-  const enc = safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(value) : Buffer.from('plain:' + value, 'utf8');
+  if (!safeStorage.isEncryptionAvailable()) throw new Error('Secure credential storage is unavailable. No credential was saved.');
+  const enc = safeStorage.encryptString(value);
   db().prepare('INSERT INTO secrets(id, value) VALUES(?, ?) ON CONFLICT(id) DO UPDATE SET value = excluded.value').run(id, enc);
   registerSecret(value);
 }
@@ -29,14 +31,17 @@ export function getStoredSecret(id: string): string | null {
   if (!row) return null;
   const buf = Buffer.from(row.value);
   const asText = buf.toString('utf8');
-  if (asText.startsWith('plain:')) return asText.slice(6);
+  if (asText.startsWith('plain:')) {
+    if (!safeStorage.isEncryptionAvailable()) return null;
+    const value = asText.slice(6); setSecret(id, value); return value;
+  }
   try { return safeStorage.decryptString(buf); } catch { return null; }
 }
 
 export function getSecret(id: string, allowEnv: boolean): { value: string; source: 'settings' | 'env' } | null {
   const stored = getStoredSecret(id);
   if (stored) { registerSecret(stored); return { value: stored, source: 'settings' }; }
-  if (allowEnv) {
+  if (allowEnv && !(JSON.parse(db().kvGet('account.disabledProviders')||'[]') as string[]).includes(id)) {
     for (const k of ENV_KEYS[id] ?? []) {
       const v = process.env[k];
       if (v) { registerSecret(v); return { value: v, source: 'env' }; }

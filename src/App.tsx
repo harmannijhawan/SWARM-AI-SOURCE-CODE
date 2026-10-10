@@ -23,6 +23,8 @@ import { Home } from './views/Home';
 import { Build } from './views/Build';
 import { Chat, ChatSidebar } from './views/Chat';
 import { Spinner, cx } from './components/ui';
+import { Authentication } from './views/Authentication';
+import type { AccountStatus } from './lib/api';
 import { LogoMark } from './components/Logo';
 
 const Agents = lazy(() => import('./views/Agents').then((m) => ({ default: m.Agents })));
@@ -36,7 +38,16 @@ const PhoneSetup = lazy(() => import('./views/PhoneSetup').then((m) => ({ defaul
 const SettingsView = lazy(() => import('./views/Settings').then((m) => ({ default: m.SettingsView })));
 
 export function App() {
+  const [status,setStatus]=useState<AccountStatus|null>(null);
+  const [error,setError]=useState('');
+  useEffect(()=>{const off=window.swarm.on('account:changed',s=>setStatus(s as AccountStatus));void api.account.status().then(setStatus).catch(()=>setError('Account service could not start. Restart SWARM to retry.'));return off;},[]);
+  if(!status?.connected)return <Authentication status={status} error={error}/>;
+  return <WorkspaceApp/>;
+}
+
+function WorkspaceApp() {
   const [ready, setReady] = useState(false);
+  const [bootError,setBootError]=useState(false);
   const boot = useStore((s) => s.boot);
   const view = useStore((s) => s.view);
   const pageMotion = useMotionChange<HTMLDivElement>(`${view}:${ready}`);
@@ -46,6 +57,7 @@ export function App() {
 
   useEffect(() => {
     const st = useStore.getState();
+    st.set({view:'chat',mode:'CHAT'});
     let workRefresh: ReturnType<typeof setTimeout> | undefined;
     const offs = [
       window.swarm.on('workspace:event', payload => {
@@ -82,7 +94,7 @@ export function App() {
       st.set({ boot: b, settings: s, projects, models: models.models, providers: models.providers, notifications, approvals, activeRuns: active });
       // Launch into Chat. Opening a project is an explicit navigation action.
       setReady(true);
-    })().catch((e) => { console.error(e); setReady(true); });
+    })().catch((e) => { setBootError(true); setReady(true); });
     return () => { offs.forEach((o) => o()); if (workRefresh) clearTimeout(workRefresh); };
   }, []);
 
@@ -123,10 +135,11 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  if(bootError)return <main className="authentication"><h1>SWARM could not load your workspace</h1><p>Your data has been preserved.</p><button onClick={()=>location.reload()}>Retry</button></main>;
   if (!ready || !settings) {
     return <div className="h-full flex items-center justify-center drag"><div className="swarm-wake"><LogoMark size={36} /></div></div>;
   }
-  if (boot?.firstRun) return <Onboarding />;
+  // Account authentication is the first-run flow; signed-in users enter Chat.
 
   const showInspector = !!inspector && settings.interface.showInspector && (view === 'agents' || view === 'models');
 

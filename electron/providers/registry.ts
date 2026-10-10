@@ -1,3 +1,4 @@
+import { managed } from './managed';
 // Dynamic model registry: discovers models from every provider adapter, keeps
 // normalized metadata, and tracks measured runtime health/latency/success.
 import type { ModelHealth, ModelInfo, ProviderInfo } from '../../shared/types';
@@ -7,14 +8,14 @@ import { getSettings } from '../core/settings';
 import { getSecret, mask } from '../core/secrets';
 import { errMsg, limitConcurrency } from '../core/util';
 import { estimateParamsB } from './heuristics';
-import { openrouter } from './openrouter';
-import { cerebras, groq, huggingface, mistral, nvidia } from './openaiCompatible';
-import { google } from './google';
-import { cloudflare } from './cloudflare';
-import { ollama } from './ollama';
+
+
+
+
+
 import { ProviderError, type ProviderAdapter, type ProviderConfig, type ProviderErrorKind } from './types';
 
-export const ADAPTERS: ProviderAdapter[] = [openrouter, nvidia, groq, google, cloudflare, huggingface, cerebras, mistral, ollama];
+export const ADAPTERS: ProviderAdapter[] = [managed];
 export const adapter = (id: string) => ADAPTERS.find((a) => a.id === id);
 
 let registryRevision = 0;
@@ -61,7 +62,7 @@ function providerInfo(a: ProviderAdapter): ProviderInfo {
 
 export function loadRegistry() {
   registryRevision++;
-  for (const m of db().list<ModelInfo>('models')) models.set(m.id, m);
+  for (const m of db().list<ModelInfo>('models')) if(m.providerId==='managed')models.set(m.id, m);
   for (const a of ADAPTERS) {
     const p = providerInfo(a);
     providers.set(a.id, p);
@@ -226,51 +227,7 @@ export function setModelEnabled(id: string, enabled: boolean) {
 }
 
 /** Health probe: a tiny real completion request. */
-export async function probeModel(id: string, signal?: AbortSignal): Promise<{ ok: boolean; latencyMs: number; error?: string }> {
-  const m = models.get(id);
-  if (!m) return { ok: false, latencyMs: 0, error: 'Unknown model' };
-  const a = adapter(m.providerId)!;
-  const ctrl = new AbortController();
-  signal?.addEventListener('abort', () => ctrl.abort(), { once: true });
-  const started = Date.now();
-  try {
-    const r = await a.chat(providerConfig(m.providerId), m.modelId, {
-      messages: [{ role: 'user', content: 'Reply with the single word: ready' }],
-      maxTokens: 16, temperature: 0, signal: ctrl.signal, stream: true,
-      firstTokenTimeoutMs: a.kind === 'local' ? 120_000 : 25_000, totalTimeoutMs: a.kind === 'local' ? 150_000 : 40_000,
-    });
-    recordSuccess(id, r.latencyMs, r.ttftMs, r.completionTokens);
-    db().put('usage', `probe_${id}_${started}`, {
-      id: `probe_${id}_${started}`, ts: started, projectId: null, runId: null, agent: null, providerId: m.providerId, modelId: m.modelId,
-      promptTokens: r.promptTokens, completionTokens: r.completionTokens, latencyMs: r.latencyMs, ok: true, error: null, costUsd: 0, local: a.kind === 'local',
-    }, { project_id: null, run_id: null, ts: started, provider_id: m.providerId, model_id: m.modelId });
-    return { ok: true, latencyMs: r.latencyMs };
-  } catch (e) {
-    const kind = e instanceof ProviderError ? e.kind : 'network';
-    recordFailure(id, kind, errMsg(e), e instanceof ProviderError ? e.retryAfterMs : undefined);
-    return { ok: false, latencyMs: Date.now() - started, error: errMsg(e) };
-  }
+export async function probeModel(_id: string, _signal?: AbortSignal): Promise<{ok:boolean;latencyMs:number;error?:string}> {
+  return {ok:false,latencyMs:0,error:'Use a chat request to verify SWARM AI. Automatic probes do not spend your allowance.'};
 }
-
-/**
- * Startup health checks. Probes a bounded sample per provider (largest/most capable
- * first) with low concurrency to respect provider rate limits. Local models are not
- * probed automatically because a probe loads multi-GB weights into memory.
- */
-export async function healthCheckSample(perProvider = 5, only?: string): Promise<void> {
-  const byProvider = new Map<string, ModelInfo[]>();
-  for (const m of listModels()) {
-    if (m.providerId === 'ollama' && !only) continue;
-    if (only && m.providerId !== only) continue;
-    if (!usable(m)) continue;
-    const list = byProvider.get(m.providerId) ?? [];
-    list.push(m); byProvider.set(m.providerId, list);
-  }
-  await Promise.all([...byProvider.entries()].map(async ([, list]) => {
-    const sample = list
-      .sort((a, b) => (a.lastCheckedAt ?? 0) - (b.lastCheckedAt ?? 0) || (b.capabilities.length - a.capabilities.length) || ((b.paramsB ?? 0) - (a.paramsB ?? 0)))
-      .slice(0, perProvider);
-    await limitConcurrency(sample, 2, async (m) => { await probeModel(m.id); });
-  }));
-  emit('MODELS_UPDATED', 'Health checks completed', {}, 'info', { healthy: listModels().filter((m) => m.health === 'healthy').length });
-}
+export async function healthCheckSample(_perProvider=5,_only?:string):Promise<void> {}

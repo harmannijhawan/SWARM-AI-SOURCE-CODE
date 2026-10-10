@@ -1,3 +1,4 @@
+import { withManagedChat } from '../account/managed';
 import { z } from 'zod';
 import type { ChatInput, ChatTurn, Conversation, NewChatInput } from '../../shared/chat';
 import type { ChatMessage } from '../providers/types';
@@ -81,7 +82,7 @@ export function sendChat(raw: ChatInput) {
   const ctrl = new AbortController(); active.set(c.id, ctrl); working.set(c.id, c);
   save(c);
   bus.send('chat:turn', { conversationId: c.id, turn: user, runId: c.runId, projectId: c.projectId });
-  void generate(c, response, input, ctrl);
+  void withManagedChat(response.id,()=>generate(c, response, input, ctrl));
   return c;
 }
 async function generate(c: Conversation, response: ChatTurn, input: ChatInput, ctrl: AbortController) {
@@ -225,8 +226,7 @@ async function generate(c: Conversation, response: ChatTurn, input: ChatInput, c
     } else response.status = ctrl.signal.aborted ? 'stopped' : 'complete';
   } catch (e) {
     response.status = ctrl.signal.aborted ? 'stopped' : 'error';
-    if (!ctrl.signal.aborted && /^(?:hey(?: swarm)?|hi|hello)[!.\s]*$/i.test(input.text.trim())) { response.text = `Hello! I'm ${c.agentRole ? ROLES[c.agentRole].name : 'SWARM'}. Connect an available AI provider in Settings and I can help with your project or PC.`; response.status = 'complete'; }
-    else if (!ctrl.signal.aborted) { response.error = errMsg(e); if (!response.text) response.text = response.error; }
+    if (!ctrl.signal.aborted) { response.error = errMsg(e); if (!response.text) response.text = response.error; }
   }
   finally { if (active.get(c.id) === ctrl) { active.delete(c.id); working.delete(c.id); } update(); const latest = db().get<Conversation>('conversations', c.id); if (latest) { c.title = latest.title; save(c); } }
 }

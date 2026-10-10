@@ -38,7 +38,9 @@ export interface Bootstrap {
 
 export interface RunSnapshot { run: Run; tasks: Task[]; agents: AgentState[]; messages: AgentMessage[]; live: boolean }
 
+export interface AccountStatus {account:{id:string;email:string|null;role:string;name?:string|null;avatar?:string|null}|null;connected:boolean;origin:string;syncing:boolean;connecting:boolean;lastSync:number|null;error:string|null}
 export const api = {
+  account:{openWebsite:()=>inv<void>('account:openWebsite'),status:()=>inv<AccountStatus>('account:status'),signIn:(origin:string)=>inv<AccountStatus>('account:signIn',origin),signOut:()=>inv<AccountStatus>('account:signOut'),sync:()=>inv<AccountStatus>('account:sync')},
   bootstrap: () => inv<Bootstrap>('app:bootstrap'),
   finishOnboarding: () => inv<boolean>('app:finishOnboarding'),
   setLastProject: (id: string | null) => inv<boolean>('app:setLastProject', id),

@@ -1,7 +1,7 @@
 {
   "name": "swarm",
   "productName": "SWARM",
-  "version": "1.0.0",
+  "version": "1.0.4",
   "description": "Give SWARM an outcome. Free-first autonomous multi-agent build platform.",
   "main": "dist/main/main.js",
   "private": true,
@@ -16,7 +16,8 @@
     "start": "electron .",
     "dev": "pnpm build && electron .",
     "test": "vitest run",
-    "package": "pnpm build && electron-builder --win --dir"
+    "package": "pnpm build && electron-builder --win --dir",
+    "release:windows": "pnpm build && electron-builder --win nsis"
   },
   "dependencies": {
     "@nut-tree-fork/nut-js": "4.2.6",
@@ -76,7 +77,16 @@
       }
     ],
     "win": {
-      "icon": "resources/icon.ico"
+      "icon": "resources/icon.ico",
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "SWARM-AI-Setup-${version}.${ext}"
     }
   }
 }

@@ -1,3 +1,4 @@
+import { finishManagedOperation } from '../account/managed';
 // Orchestrator: UNDERSTAND → PLAN → DECOMPOSE → ROUTE → EXECUTE → OBSERVE → VERIFY → RECOVER → COMPLETE.
 // Runs a dynamic task DAG with real concurrency and a bounded self-repair loop.
 import fs from 'node:fs';
@@ -109,7 +110,7 @@ export function startRun(projectId: string, objective: string, options: Partial<
   if (!project.memory.objective) project.memory.objective = run.objective;
   saveProject(project);
   emit('RUN_STARTED', `Run started: ${truncate(run.objective, 140)}`, ctx.scope(), 'info', { run });
-  void execute(ctx);
+  void execute(ctx).finally(()=>finishManagedOperation(ctx.run.id));
   return run;
 }
 

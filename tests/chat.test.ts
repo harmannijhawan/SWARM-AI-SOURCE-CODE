@@ -7,6 +7,11 @@ import { defaultSettings } from '../shared/settings';
 const fixture = vi.hoisted(() => ({ chat: vi.fn(), models: [] as ModelInfo[], search: vi.fn(), success: vi.fn(), failure: vi.fn(), revision: 0, create: vi.fn(), start: vi.fn(), computer: vi.fn() }));
 vi.mock('electron', () => ({ Notification: { isSupported: () => false }, BrowserWindow: { getAllWindows: () => [] } }));
 vi.mock('../electron/providers/registry', () => ({ getRegistryRevision: () => fixture.revision++, listModels: () => fixture.models, usable: () => true, adapter: () => ({ kind: 'local', chat: fixture.chat }), providerConfig: () => ({}), recordSuccess: fixture.success, recordFailure: fixture.failure }));
+vi.mock('../electron/account/sync',()=>({managedRequest:async(path:string,body:any,signal:AbortSignal)=>{
+  if(path!=='managed/complete')return {ok:true};
+  const result=await fixture.chat({},'managed-model',{...body,signal,onToken:()=>{}});
+  return {result,model:{id:'managed-model',displayName:'Managed fixture',contextLength:32000,capabilities:['chat','coding','vision']}};
+}}));
 vi.mock('../electron/research/search', () => ({ webSearch: fixture.search }));
 vi.mock('../electron/core/settings', () => ({ getSettings: () => defaultSettings() }));
 vi.mock('../electron/projects/projects', () => ({ createProject: fixture.create, listProjects: () => [], getProject: () => null }));
@@ -54,10 +59,10 @@ describe('Chat service and real shared router', () => {
     sendChat({id:c.id,text:'What about useEffect?'});await finished(c.id);
     const msgs=fixture.chat.mock.calls[1][2].messages;expect(msgs.map((m:any)=>m.content)).toContain('hi');expect(msgs.map((m:any)=>m.content)).toContain('Hello');
   });
-  it.each(['timeout','rate_limit','server'] as const)('falls back after %s and removes partial failed output', async kind => {
-    fixture.chat.mockImplementationOnce(async (_c,_m,req)=>{req.onToken('BROKEN');throw new ProviderError(kind,'fixture failure');});
+  it.each(['timeout','rate_limit','server'] as const)('reports backend %s without locally replaying or faking success', async kind => {
+    fixture.chat.mockImplementationOnce(async (_c,_m,req)=>{req.onToken?.('BROKEN');throw new ProviderError(kind,'fixture failure');});
     const c=newChat();sendChat({id:c.id,text:'hi'});const done=await finished(c.id);
-    expect(done.turns.at(-1)?.text).toBe('Hello');expect(done.turns.at(-1)?.routing).toContain('Fallback succeeded');expect(fixture.failure).toHaveBeenCalledOnce();expect(fixture.success).toHaveBeenCalledOnce();
+    expect(done.turns.at(-1)?.status).toBe('error');expect(done.turns.at(-1)?.text).not.toContain('BROKEN');expect(fixture.chat).toHaveBeenCalledOnce();
   });
   it('all-model failure stays a chat error',async()=>{
     fixture.chat.mockRejectedValue(new ProviderError('server','unavailable'));

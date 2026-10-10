@@ -8,7 +8,7 @@ async function invoke<T>(channel: string, ...args: unknown[]): Promise<T> {
   return r.data;
 }
 
-const ALLOWED_EVENTS = new Set(['chat:updated', 'chat:turn', 'workspace:event', 'computer:activity', 'events', 'run:updated', 'models:changed', 'settings:changed', 'notification', 'approvals:changed', 'menu', 'run:chat:updated', 'remote:changed']);
+const ALLOWED_EVENTS = new Set(['account:changed', 'chat:updated', 'chat:turn', 'workspace:event', 'computer:activity', 'events', 'run:updated', 'models:changed', 'settings:changed', 'notification', 'approvals:changed', 'menu', 'run:chat:updated', 'remote:changed']);
 
 contextBridge.exposeInMainWorld('swarm', {
   invoke,

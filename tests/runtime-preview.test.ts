@@ -14,7 +14,7 @@ it('runs a real CLI, accepts stdin, captures both streams, stops and restarts', 
     await runtime.start({ path: 'app.cjs', type: 'binary' });
     expect(runtime.sendInput('Alice\n')).toBe(true);
     const wait = async (fn: () => boolean) => { for (let i = 0; i < 50 && !fn(); i++) await new Promise(r => setTimeout(r, 20)); expect(fn()).toBe(true); };
-    await wait(() => runtime.getLogs().stdout.includes('Hello Alice'));
+    await wait(() => runtime.getLogs().stdout.includes('Hello Alice') && runtime.getLogs().stderr.includes('diagnostic'));
     expect(runtime.getLogs().stderr).toContain('diagnostic');
     const pid = runtime.getInfo().pid;
     await runtime.stop();

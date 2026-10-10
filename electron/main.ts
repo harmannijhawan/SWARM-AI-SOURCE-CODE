@@ -1,3 +1,4 @@
+import { startAccountSync, stopAccountSync, syncAccount } from './account/sync';
 import { app, BrowserWindow, Menu, nativeImage, nativeTheme, session, shell, Tray } from 'electron';
 import path from 'node:path';
 import { initDb, db } from './core/db';
@@ -16,6 +17,7 @@ import { workspaceRoot } from './projects/projects';
 import type { Project, Run, Task } from '../shared/types';
 
 let win: BrowserWindow | null = null;
+let webWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 /** Tray mode: closing the window only hides it; Quit (tray menu) is the only way to really exit. */
 let isQuitting = false;
@@ -23,8 +25,9 @@ const isSmoke = process.argv.includes('--smoke');
 const isRemoteSelfTest = process.argv.includes('--remote-self-test');
 const isDiagnosticHost = process.argv.includes('--remote-diagnostic-host');
 
-if (!isRemoteSelfTest && !isDiagnosticHost && !app.requestSingleInstanceLock() && !isSmoke) app.quit();
+if (!isRemoteSelfTest && !isDiagnosticHost && !app.requestSingleInstanceLock() && !isSmoke && !process.argv.includes('--web-smoke') && !process.argv.includes('--account-sync-only')) app.quit();
 function showWindow() {
+  if(webWindow&&!webWindow.isDestroyed()){if(webWindow.isMinimized())webWindow.restore();webWindow.show();webWindow.focus();return;}
   if (!win) { createWindow(); return; }
   if (win.isMinimized()) win.restore();
   win.show();
@@ -35,6 +38,21 @@ app.setAppUserModelId('ai.swarm.desktop');
 if (process.env.SWARM_USER_DATA) app.setPath('userData', process.env.SWARM_USER_DATA);
 
 const resources = () => (app.isPackaged ? path.join(process.resourcesPath, 'resources') : path.join(__dirname, '..', '..', 'resources'));
+
+function createWebWindow() {
+  if(webWindow&&!webWindow.isDestroyed()){webWindow.show();webWindow.focus();return;}
+  const origin='https://www.swarmgpt.online';
+  webWindow=new BrowserWindow({width:1440,height:920,minWidth:680,minHeight:640,title:'SWARM',backgroundColor:'#ffffff',icon:path.join(resources(),process.platform==='win32'?'icon.ico':'icon.png'),webPreferences:{partition:'persist:swarm-web',nodeIntegration:false,contextIsolation:true,sandbox:true,webviewTag:false}});
+  const current=webWindow;
+  current.webContents.setWindowOpenHandler(({url})=>{if(/^https:\/\//.test(url))void shell.openExternal(url);return {action:'deny'};});
+  current.webContents.on('will-navigate',(event,url)=>{if(new URL(url).origin!==origin){event.preventDefault();if(url.startsWith('https://'))void shell.openExternal(url);}});
+  current.webContents.on('did-fail-load',(_event,code,_description,_url,isMainFrame)=>{if(isMainFrame&&code!==-3)void current.loadURL('data:text/html;charset=utf-8,'+encodeURIComponent('<html><body style="font:16px system-ui;padding:60px"><h1>SWARM needs a connection</h1><p>Reconnect, then choose Workspace → Reload web workspace. Local projects remain available under Workspace → Local desktop tools.</p></body></html>'));});
+  current.setMenu(Menu.buildFromTemplate([{label:'Workspace',submenu:[{label:'Web workspace',click:()=>void current.loadURL(origin+'/app')},{label:'Local desktop tools',click:()=>{if(win&&!win.isDestroyed()){win.show();win.focus();}else createWindow();}},{label:'Reload web workspace',accelerator:'CmdOrCtrl+R',click:()=>void current.loadURL(origin+'/app')},{type:'separator'},{role:'quit'}]},{role:'editMenu'},{role:'viewMenu'}]));
+  current.on('close',event=>{if(!isQuitting&&tray){event.preventDefault();current.hide();}});
+  current.on('closed',()=>{webWindow=null;});
+  void current.loadURL(origin+'/app');
+  if(process.argv.includes('--web-smoke'))current.webContents.once('did-finish-load',()=>{void current.webContents.executeJavaScript('JSON.stringify({url:location.href,title:document.title,nativeBridge:typeof window.swarm})').then(result=>{console.log('SWARM_WEB_SMOKE '+result);app.exit(current.webContents.getURL().startsWith(origin)?0:1);});});
+}
 
 function createWindow() {
   const s = getSettings();
@@ -86,7 +104,8 @@ function createTray() {
     tray = new Tray(process.platform === 'win32' ? img : img.resize({ width: 18, height: 18 }));
     tray.setToolTip('SWARM');
     tray.setContextMenu(Menu.buildFromTemplate([
-      { label: 'Open SWARM', click: () => showWindow() },
+      { label: 'Open SWARM', click: () => {if(!webWindow)createWebWindow();else showWindow();} },
+      {label:'Local desktop tools',click:()=>{if(win){win.show();win.focus();}else createWindow();}},
       { label: 'Quit', click: () => { isQuitting = true; app.quit(); } },
     ]));
     tray.on('click', () => showWindow());
@@ -138,6 +157,9 @@ app.whenReady().then(async () => {
     return;
   }
   initDb(path.join(app.getPath('userData'), 'swarm.db'));
+  if(process.argv.includes('--account-sync-only')) {
+    try {await startAccountSync();const status=await syncAccount();console.log(JSON.stringify({account:status.account,connected:status.connected,lastSync:status.lastSync,error:status.error,chats:db().list('conversations').length}));stopAccountSync();db().close();app.exit(status.error?1:0);}catch{app.exit(1);}return;
+  }
   const s = getSettings();
   bus.debug = s.logs.level === 'debug';
   bus.persist = s.privacy.storeLogs;
@@ -150,15 +172,16 @@ app.whenReady().then(async () => {
     (channel, payload) => win?.webContents.send(channel, payload),
   );
   registerIpc(() => win);
+  void startAccountSync().catch(() => console.error('Account connection could not start.'));
   startRemote({ invoke: callHandler, send: (channel, payload) => { if (win && !win.isDestroyed()) win.webContents.send(channel, payload); } });
   // Content Security Policy for the app renderer (guest webviews are separate).
   session.defaultSession.webRequest.onHeadersReceived((details, cb) => {
     if (details.url.startsWith('file://')) {
-      cb({ responseHeaders: { ...details.responseHeaders, 'Content-Security-Policy': ["default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self'; connect-src 'self'"] } });
+      cb({ responseHeaders: { ...details.responseHeaders, 'Content-Security-Policy': ["default-src 'self'; img-src 'self' data: blob: https://img.clerk.com https://images.clerk.dev; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self'; connect-src 'self'"] } });
     } else cb({ responseHeaders: details.responseHeaders });
   });
   createTray();
-  createWindow();
+  if(isSmoke)createWindow();else createWebWindow();
   onSettings(() => scheduleDiscovery());
   scheduleDiscovery();
   // Model discovery + health checks run in the background; the UI is usable immediately.
@@ -172,6 +195,7 @@ async function cleanup() {
   if (isRemoteSelfTest) return;
   if (cleaned) return;
   cleaned = true;
+  stopAccountSync();
   await stopRemote().catch(() => undefined); // closes the bridge and removes router port mappings
   cancelExperiment();
   cancelAll();
@@ -193,4 +217,4 @@ app.on('before-quit', (e) => {
 });
 // Tray mode: the app keeps running (agents, remote bridge) without a window. Quit from the tray menu.
 app.on('window-all-closed', () => { if (isSmoke || !tray) app.quit(); });
-app.on('activate', () => { if (!BrowserWindow.getAllWindows().length) createWindow(); else showWindow(); });
+app.on('activate', () => { if (!BrowserWindow.getAllWindows().length) createWebWindow(); else showWindow(); });

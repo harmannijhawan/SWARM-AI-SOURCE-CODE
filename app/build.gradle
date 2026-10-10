@@ -14,8 +14,8 @@ android {
         applicationId "com.swarm.ai"
         minSdk 26
         targetSdk 36
-        versionCode 1
-        versionName "1.0"
+        versionCode 4
+        versionName "1.0.4"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -23,8 +23,19 @@ android {
         }
     }
 
+    signingConfigs {
+        if (System.getenv('SWARM_ANDROID_KEYSTORE')) {
+            release {
+                storeFile file(System.getenv('SWARM_ANDROID_KEYSTORE'))
+                storePassword System.getenv('SWARM_ANDROID_STORE_PASSWORD')
+                keyAlias System.getenv('SWARM_ANDROID_KEY_ALIAS')
+                keyPassword System.getenv('SWARM_ANDROID_KEY_PASSWORD')
+            }
+        }
+    }
     buildTypes {
         release {
+            if (System.getenv('SWARM_ANDROID_KEYSTORE')) signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
@@ -108,4 +119,11 @@ dependencies {
     androidTestImplementation 'androidx.compose.ui:ui-test-junit4'
     debugImplementation 'androidx.compose.ui:ui-tooling'
     debugImplementation 'androidx.compose.ui:ui-test-manifest'
+}
+// Never let an unsigned APK be mistaken for a signed release.
+gradle.taskGraph.whenReady { graph ->
+    if (graph.allTasks.any { it.name.toLowerCase().contains('release') } &&
+        ['SWARM_ANDROID_KEYSTORE','SWARM_ANDROID_STORE_PASSWORD','SWARM_ANDROID_KEY_ALIAS','SWARM_ANDROID_KEY_PASSWORD'].any { !System.getenv(it) }) {
+        throw new GradleException('Android release requires SWARM_ANDROID_KEYSTORE, SWARM_ANDROID_STORE_PASSWORD, SWARM_ANDROID_KEY_ALIAS and SWARM_ANDROID_KEY_PASSWORD. Debug builds are not production releases.')
+    }
 }

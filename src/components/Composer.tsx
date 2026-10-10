@@ -146,7 +146,7 @@ export function Composer({ variant }: { variant: 'hero' | 'dock' }) {
                 {usable.map((m) => (
                   <PopItem key={m.id} selected={pinned === m.id} onClick={() => { setPinned(m.id); setMenu(null); }} title={m.displayName} sub={`${m.providerId} · ${healthLabel(m.health)}${m.latencyMs ? ` · ${(m.latencyMs / 1000).toFixed(1)}s` : ''}`} />
                 ))}
-                {!usable.length && <div className="px-3 py-4 text-xs text-fg-3">No usable models yet. Connect a provider in Settings › Providers or start Ollama.</div>}
+                {!usable.length && <div className="px-3 py-4 text-xs text-fg-3">No eligible SWARM backend models are currently available. Retry after refreshing your account.</div>}
               </div>
             </Popover>
           )}

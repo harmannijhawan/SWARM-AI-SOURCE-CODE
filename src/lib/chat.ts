@@ -20,5 +20,5 @@ export const useChat = create<ChatState>((set, get) => ({
   refresh: async () => { set({ list: await chatApi.list() }); },
   open: async id => { const current = await chatApi.get(id); set({ current, error: '' }); localStorage.setItem('swarm:chat', id); },
   fresh: async options => { const c = await chatApi.create(options); get().ingest(c); set({ current: c, error: '' }); localStorage.setItem('swarm:chat', c.id); },
-  ingest: c => set(s => ({ list: [{ ...c, turns: [] }, ...s.list.filter(x => x.id !== c.id)].sort((a,b) => b.updatedAt-a.updatedAt), current: s.current?.id === c.id ? c : s.current })),
+  ingest: c => {if((c as Conversation & {deleted?:boolean}).deleted){set(s=>({list:s.list.filter(x=>x.id!==c.id),current:s.current?.id===c.id?null:s.current}));return;}set(s => ({ list: [{ ...c, turns: [] }, ...s.list.filter(x => x.id !== c.id)].sort((a,b) => b.updatedAt-a.updatedAt), current: s.current?.id === c.id ? c : s.current }));},
 }));

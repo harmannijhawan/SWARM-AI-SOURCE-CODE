@@ -18,7 +18,7 @@ export class ChatRouter {
     const maxTokens = 4096;
     const full = rankModels({ purpose, needs, promptTokens: estimatePromptTokens(messages) + maxTokens, maxTokens, pinned: pinned ?? '' });
     const candidates = full.length ? full : rankModels({ purpose, needs, promptTokens: 1, maxTokens, pinned: pinned ?? '' });
-    if (!candidates.length) throw new Error('No eligible model is available. Connect a provider in Settings or start Ollama.');
+    if (!candidates.length) throw new Error('No eligible SWARM backend model is available. Refresh model availability or retry later. No API key is required.');
     const budget = Math.max(512, candidates[0].model.contextLength - maxTokens - 256);
     const context = [...messages];
     if (summaryOnly) context[0] = { role: 'system', content: `You are SWARM, the user's assistant. The requested tool work has already been performed. Answer the user's request now using the actual observations and screenshot supplied in the recent messages. Distinguish what is visibly shown in the screenshot from OS-reported window metadata, which may include background windows. Mention the foreground window first when asked what is open. Never describe OS metadata as text read from the screenshot. Tools are unavailable for this response. Return only a concise natural-language answer, without action tags, tool calls or hidden reasoning. Never invent applications, file changes, test results or successful actions. If evidence is insufficient, describe that specific limitation. Original user request: ${text}` };

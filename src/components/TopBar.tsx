@@ -60,6 +60,7 @@ export function TopBar() {
       </button>
     )}
     
+    <button className="no-drag px-3 text-xs text-fg-2" onClick={()=>useStore.setState({view:'settings',settingsSection:'account'})}>Account</button>
     <nav className="app-navigation no-drag" aria-label="Workspace navigation">
       <button aria-pressed={view === 'chat'} onClick={() => useStore.getState().setView('chat')}><MessageSquare size={16} /><span>Chat</span></button>
       <button aria-pressed={view === 'agents'} onClick={() => useStore.getState().setView('agents')}><Users size={16} /><span>Agents</span></button>

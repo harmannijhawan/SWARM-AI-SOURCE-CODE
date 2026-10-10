@@ -1,3 +1,4 @@
+import { AccountSettings } from './AccountSettings';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Bell, Bot, Brain, Braces, Database, FlaskConical, FolderCog, Gauge, Globe, Keyboard, LayoutPanelLeft, Lock, MemoryStick, MonitorSmartphone,
@@ -38,6 +39,7 @@ const text = (path: string, label: string, desc: string, placeholder = ''): RowD
 const list = (path: string, label: string, desc: string): RowDef => ({ label, desc, full: true, render: (g, s) => <ListEditor value={(g(path) as string[]) ?? []} onChange={(v) => s(path, v)} label={label} /> });
 
 const PAGES: Page[] = [
+  {id:'account',group:'Basics',label:'Account & sync',icon:Shield,desc:'Your account, ownership and cloud sync.',sections:[],custom:()=> <AccountSettings/>},
   { id: 'general', group: 'Basics', label: 'General', icon: Settings2, desc: 'Startup and everyday behavior.', sections: [{ rows: [
     seg('general.startup', 'On startup', [['home', 'Home'], ['last_project', 'Last project']], 'What SWARM opens when it launches.'),
     tog('general.confirmDestructive', 'Confirm destructive actions', 'Ask before deleting projects or clearing data.'),
@@ -70,7 +72,7 @@ const PAGES: Page[] = [
     numIn('ai.temperature', 'Temperature', 'Lower is more deterministic.', 0, 1.5, 0.05),
     numIn('ai.maxOutputTokens', 'Max output tokens', 'Upper bound per model response.', 1024, 32768, 512),
   ] }] },
-  { id: 'providers', group: 'Intelligence', label: 'Providers', icon: Plug, desc: 'Connect free providers. Keys are encrypted with your OS keychain and never reach agents, logs or this window.', sections: [], custom: () => <ProvidersPage /> },
+  { id: 'providers', group: 'Intelligence', label: 'Providers', icon: Plug, desc: 'SWARM manages provider access securely on the backend.', sections: [], custom: () => <AccountSettings /> },
   { id: 'routing', group: 'Intelligence', label: 'Model Routing', icon: Route, desc: 'Fallback, timeouts and discovery.', sections: [{ rows: [
     numIn('routing.maxFallbacks', 'Max fallbacks per request', 'How many alternative models to try when one fails.', 0, 12),
     numIn('routing.firstTokenTimeoutSec', 'First-token timeout', 'Give up on a model that has not started responding.', 5, 180, 5, 's'),
@@ -182,6 +184,8 @@ const PAGES: Page[] = [
     tog('experimental.crawlLinks', 'Crawl internal links in browser tests'),
   ] }] },
 ];
+for(const page of PAGES)if(['ai','routing'].includes(page.id)){page.sections=[];page.custom=()=> <AccountSettings/>;}
+
 
 export function SettingsView() {
   const settings = useStore((s) => s.settings)!;
@@ -330,74 +334,6 @@ function ResetMemory() {
     await api.projects.update(projectId, { memory: { objective: '', summary: '', completedTasks: [], unresolved: [], decisions: [], architecture: '', lastRunOutcome: '', commands: {} } } as never);
     toast({ level: 'success', title: 'Project memory reset' });
   }}>Reset</Button>;
-}
-
-function ProvidersPage() {
-  const providers = useStore((s) => s.providers);
-  const settings = useStore((s) => s.settings)!;
-  const save = useStore((s) => s.saveSettings);
-  const toast = useStore((s) => s.toast);
-  const [keys, setKeys] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState<string | null>(null);
-  const saveKey = async (id: string, key: string | null) => {
-    setBusy(id);
-    try { const r = await api.providers.setKey(id, key); toast({ level: 'success', title: key ? 'Key saved' : 'Key removed', body: r.hint ?? undefined }); setKeys((k) => ({ ...k, [id]: '' })); const m = await api.models.list(); useStore.setState({ models: m.models, providers: m.providers }); }
-    catch (e) { toast({ level: 'error', title: 'Could not save key', body: String((e as Error).message) }); }
-    finally { setBusy(null); }
-  };
-  const test = async (id: string) => {
-    setBusy(id);
-    try { await api.models.discover(id); await api.models.healthCheck(id); const m = await api.models.list(); useStore.setState({ models: m.models, providers: m.providers }); const p = m.providers.find((x) => x.id === id); toast({ level: p?.health === 'healthy' ? 'success' : 'warning', title: `${p?.name}: ${healthLabel(p?.health ?? 'unknown')}`, body: p?.lastError ?? `${p?.modelCount} models` }); }
-    finally { setBusy(null); }
-  };
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between rounded-xl bg-sunken border border-line px-4 py-3">
-        <div className="text-[0.76rem] text-fg-2">Use API keys from environment variables (e.g. <span className="mono">NVIDIA_API_KEY</span>, <span className="mono">GROQ_API_KEY</span>)</div>
-        <Toggle label="Use environment keys" checked={settings.providers.useEnvKeys} onChange={(v) => save({ providers: { useEnvKeys: v } })} />
-      </div>
-      {providers.map((p) => (
-        <div key={p.id} className="rounded-2xl border border-line bg-panel p-4">
-          <div className="flex items-start gap-3">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="text-[0.88rem] font-semibold">{p.name}</span>
-                <span className="flex items-center gap-1 text-[0.7rem] text-fg-2"><Dot tone={!p.enabled ? 'neutral' : healthTone(p.health)} />{!p.enabled ? 'Disabled' : !p.configured ? (p.requiresKey ? 'Not connected' : 'Not detected') : healthLabel(p.health)}</span>
-                {p.kind === 'local' && <Badge>local</Badge>}
-              </div>
-              <div className="text-[0.72rem] text-fg-3 mt-0.5">{p.freeNotes}</div>
-              <div className="text-[0.7rem] text-fg-3 mt-1 tabular">{p.modelCount} models{p.lastDiscoveryAt ? ` · discovered ${timeAgo(p.lastDiscoveryAt)}` : ''}{p.latencyMs ? ` · ${p.latencyMs} ms` : ''}</div>
-              {p.lastError && p.enabled && <div className="text-[0.7rem] text-warn mt-1 break-words">{p.lastError.slice(0, 200)}</div>}
-            </div>
-            <Toggle label={`Enable ${p.name}`} checked={p.enabled} onChange={async (v) => { useStore.setState({ providers: await api.providers.configure(p.id, { enabled: v }) }); }} />
-          </div>
-          {p.enabled && (
-            <div className="mt-3 pt-3 border-t border-line space-y-2">
-              {p.requiresKey && (
-                <div className="flex items-center gap-2">
-                  <span className="w-24 text-[0.74rem] text-fg-2 shrink-0">API key</span>
-                  {p.keyHint ? <span className="mono text-[0.72rem] text-fg-2 flex items-center gap-1.5"><Check size={12} className="text-ok" />{p.keyHint}{p.keySource === 'env' && <Badge>env</Badge>}</span> : null}
-                  <Input type="password" aria-label={`${p.name} API key`} placeholder={p.keyHint ? 'Replace key' : 'Paste key'} value={keys[p.id] ?? ''} onChange={(e) => setKeys((k) => ({ ...k, [p.id]: e.target.value }))} className="flex-1 h-7" />
-                  <Button size="sm" variant="primary" disabled={!keys[p.id]?.trim()} loading={busy === p.id} onClick={() => saveKey(p.id, keys[p.id])}>Save</Button>
-                  {p.keySource === 'settings' && <Button size="sm" variant="ghost" onClick={() => saveKey(p.id, null)}>Remove</Button>}
-                </div>
-              )}
-              {p.needsAccountId && (
-                <div className="flex items-center gap-2"><span className="w-24 text-[0.74rem] text-fg-2 shrink-0">Account ID</span>
-                  <DebouncedInput label="Cloudflare account ID" value={settings.providers.accountIds[p.id] ?? ''} onCommit={async (v) => { useStore.setState({ providers: await api.providers.configure(p.id, { accountId: v }) }); }} /></div>
-              )}
-              <div className="flex items-center gap-2"><span className="w-24 text-[0.74rem] text-fg-2 shrink-0">Base URL</span><span className="mono text-[0.7rem] text-fg-3 truncate flex-1">{p.baseUrl}</span>
-                <Button size="sm" variant="ghost" onClick={async () => { const r = await ask({ title: `${p.name} base URL`, input: { initial: p.baseUrl }, confirmLabel: 'Save' }); if (r.ok) { if (p.id === 'ollama') await save({ advanced: { ollamaUrl: r.value } }); useStore.setState({ providers: await api.providers.configure(p.id, { baseUrl: r.value }) }); } }}>Edit</Button></div>
-              <div className="flex items-center gap-2 pt-1">
-                <Button size="sm" loading={busy === p.id} disabled={!p.configured && !['openrouter', 'ollama'].includes(p.id)} onClick={() => test(p.id)}>Test connection</Button>
-                <Button size="sm" variant="ghost" icon={ExternalLink} onClick={() => api.openExternal(p.signupUrl)}>{p.kind === 'local' ? 'Download' : 'Get a free key'}</Button>
-              </div>
-            </div>
-          )}
-        </div>
-      ))}
-    </div>
-  );
 }
 
 function ResearchPage() {
